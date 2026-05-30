@@ -70,7 +70,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* ตกแต่งปุ่มเลือกไฟล์ */
         input[type="file"] {
             width: 100%;
             background: #2c2c2e;
@@ -82,7 +81,6 @@
             font-size: 14px;
         }
 
-        /* ตกแต่งช่องกรอกตัวเลข */
         input[type="number"] {
             width: 100%;
             background: #2c2c2e;
@@ -100,7 +98,6 @@
             border-color: var(--accent-color);
         }
 
-        /* ปุ่มสั่งการขนาดใหญ่เต็มนิ้วมือถือ */
         .btn-primary {
             width: 100%;
             background-color: var(--text-color);
@@ -122,7 +119,6 @@
             opacity: 0.9;
         }
 
-        /* บล็อกแสดงสถานะ */
         #status {
             background-color: #2c2c2e;
             padding: 12px;
@@ -134,7 +130,6 @@
             border-left: 4px solid var(--accent-color);
         }
 
-        /* หลอดบอกสถานะสุดล้ำ */
         .progress-container {
             width: 100%;
             background-color: #2c2c2e;
@@ -167,7 +162,6 @@
             color: white;
         }
 
-        /* กล่องรายการดาวน์โหลด */
         #output-list {
             margin-top: 25px;
         }
@@ -178,32 +172,49 @@
             margin-bottom: 12px;
         }
 
-        .download-btn {
-            width: 100%;
-            background-color: transparent;
+        /* 🆕 จัดโครงสร้างกล่องปุ่มแบบคู่ (ดาวน์โหลด + แชร์) */
+        .clip-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            align-items: center;
+            background: #1c1c1e;
+            padding: 8px;
+            border-radius: 10px;
+            border: 1px solid #2c2c2e;
+        }
+
+        .clip-title {
+            flex-grow: 1;
+            font-size: 14px;
+            font-weight: 600;
+            padding-left: 8px;
+        }
+
+        .action-btn {
+            background-color: #2c2c2e;
             color: var(--text-color);
             border: 1px solid #48484a;
-            padding: 14px;
+            padding: 12px 16px;
             border-radius: 8px;
             font-size: 14px;
             font-weight: 600;
-            text-align: left;
-            margin-bottom: 10px;
             cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             transition: background 0.2s;
         }
 
-        .download-btn:active {
-            background-color: #2c2c2e;
+        .action-btn:active {
+            background-color: #3a3a3c;
             border-color: var(--accent-color);
         }
 
-        .download-btn::after {
-            content: '⬇️';
-            font-size: 14px;
+        .share-btn {
+            background-color: var(--blue-color);
+            border-color: var(--blue-color);
+        }
+        
+        .share-btn:active {
+            background-color: #0051d4;
         }
     </style>
 </head>
@@ -269,7 +280,6 @@
                 return;
             }
 
-            // เคสสคริปต์เปิดช้า ให้ลองผูกอ็อบเจกต์ใหม่ตรงนี้อีกรอบ
             if (!ffmpeg && typeof FFmpeg !== 'undefined') {
                 const { createFFmpeg } = FFmpeg;
                 ffmpeg = createFFmpeg({ log: true });
@@ -307,7 +317,6 @@
                     }
                 });
 
-                // ตรวจสอบโครงสร้างและเริ่มโหลดโมดูล
                 if (!ffmpeg.isLoaded()) {
                     await ffmpeg.load();
                 }
@@ -350,6 +359,7 @@
             }
         }
 
+        // 🆕 ฟังก์ชันอัปเกรด: สร้างแถวที่มีทั้งปุ่มดาวน์โหลด และ ปุ่มแชร์ข้ามแอป
         function generateDownloadButtons() {
             const outputList = document.getElementById('output-list');
             outputList.innerHTML = '<h3>คลิปย่อยที่หั่นสำเร็จ:</h3>';
@@ -359,20 +369,61 @@
                 try {
                     const fileName = `output_${i}.mp4`;
                     const data = ffmpeg.FS('readFile', fileName);
+                    
+                    // แปลงข้อมูลแรมเสมือนเป็นไฟล์วิดีโอตัวจริง
                     const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
                     const url = URL.createObjectURL(videoBlob);
+                    const currentClipIndex = i + 1;
 
-                    const btn = document.createElement('button');
-                    btn.className = 'download-btn';
-                    btn.innerHTML = `<span>คลิปย่อยท่อนที่ ${i + 1}</span>`;
-                    btn.onclick = () => {
+                    // สร้างไฟล์อ็อบเจกต์จริงเพื่อใช้กับระบบ Web Share API
+                    const videoFile = new File([videoBlob], `clip_${currentClipIndex}.mp4`, { type: 'video/mp4' });
+
+                    // สร้างโครงสร้างแถว (Row)
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'clip-row';
+
+                    // ข้อความหัวข้อคลิป
+                    const titleDiv = document.createElement('div');
+                    titleDiv.className = 'clip-title';
+                    titleDiv.innerText = `ท่อนที่ ${currentClipIndex}`;
+                    rowDiv.appendChild(titleDiv);
+
+                    // 1. ปุ่มดาวน์โหลดลงเครื่อง
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'action-btn';
+                    dlBtn.innerText = '💾';
+                    dlBtn.title = 'ดาวน์โหลดลงเครื่อง';
+                    dlBtn.onclick = () => {
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `split_clip_${i + 1}.mp4`;
+                        a.download = `split_clip_${currentClipIndex}.mp4`;
                         a.click();
                     };
+                    rowDiv.appendChild(dlBtn);
 
-                    outputList.appendChild(btn);
+                    // 2. ปุ่มแชร์อัจฉริยะ (ส่งเข้าแอป TikTok / YouTube / Facebook ทันที)
+                    const shareBtn = document.createElement('button');
+                    shareBtn.className = 'action-btn share-btn';
+                    shareBtn.innerText = '📤 แชร์';
+                    shareBtn.onclick = async () => {
+                        // ตรวจสอบว่าเบราว์เซอร์และเครื่องมือถือรองรับการแชร์ไฟล์ไหม
+                        if (navigator.canShare && navigator.canShare({ files: [videoFile] })) {
+                            try {
+                                await navigator.share({
+                                    files: [videoFile],
+                                    title: `ส่งออกคลิปท่อนที่ ${currentClipIndex}`,
+                                    text: 'หั่นคลิปเสร็จแล้ว เตรียมพร้อมโพสต์โซเชียล!'
+                                });
+                            } catch (err) {
+                                console.log('ผู้ใช้ยกเลิกการแชร์ หรือแอปปลายทางไม่รองรับ', err);
+                            }
+                        } else {
+                            alert('❌ มือถือหรือเบราว์เซอร์ของคุณไม่รองรับระบบแชร์ไฟล์ตรงๆ แนะนำให้กดปุ่มดาวน์โหลด (💾) แล้วนำไปโพสต์ด้วยตัวเองแทนครับ');
+                        }
+                    };
+                    rowDiv.appendChild(shareBtn);
+
+                    outputList.appendChild(rowDiv);
                     i++;
                 } catch (e) {
                     break;
