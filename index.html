@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Video Splitter Pro</title>
+    
+    <script src="./ffmpeg.min.js" onerror="handleScriptError()"></script>
+
+    <style>
+        .progress-container {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: none;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 20px;
+            background-color: #2196F3;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+            border-radius: 8px;
+            font-size: 12px;
+            transition: width 0.2s ease;
+        }
+        .video-bar { background-color: #4CAF50; }
+        /* สไตล์หลอดสถานะเมื่อเกิดข้อผิดพลาด */
+        .error-bar { background-color: #f44336 !important; }
+    </style>
+</head>
+<body>
+    <h2>โปรแกรมหั่นวิดีโอ (Client-Side)</h2>
+    
+    <input type="file" id="video-input" accept="video/*">
+    <br><br>
+    <label>แบ่งเป็นคลิปละ (วินาที): </label>
+    <input type="number" id="duration-input" value="60">
+    <br><br>
+    <button onclick="processVideo()">เริ่มหั่นวิดีโอ</button>
+
+    <div id="status" style="margin-top: 15px; font-weight: bold;">สถานะ: รอสั่งงาน</div>
+
+    <div id="system-progress-container" class="progress-container">
+        <p style="margin: 5px 0; font-size: 14px;">กำลังโหลดระบบประมวลผล:</p>
+        <div id="system-progress-bar" class="progress-bar">0%</div>
+    </div>
+
+    <div id="video-progress-container" class="progress-container">
+        <p style="margin: 5px 0; font-size: 14px;">กำลังสับวิดีโอ:</p>
+        <div id="video-progress-bar" class="progress-bar video-bar">0%</div>
+    </div>
+
+    <div id="output-list"></div>
+
+    <script>
+        // ฟังก์ชันดักจับกรณีดึงไฟล์ ffmpeg.min.js ไม่สำเร็จ
+        function handleScriptError() {
+            alert("❌ ไม่พบไฟล์ ffmpeg.min.js ในโฟลเดอร์ของคุณ! กรุณาตรวจสอบว่าชื่อไฟล์ถูกต้องและอยู่คู่กับ index.html");
+            document.getElementById('status').innerText = "ข้อผิดพลาด: หาไฟล์สคริปต์ระบบไม่เจอ";
+        }
+
+        // ตรวจสอบความพร้อมของไลบรารี FFmpeg ก่อนเริ่มทำงาน
+        let ffmpeg = null;
+        
+        // เราจะตรวจสอบหลังจากหน้าเว็บโหลดเสร็จสิ้นเพื่อไม่ให้ขัดขวางปุ่มกด
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof FFmpeg === 'undefined') {
+                alert("❌ ระบบ FFmpeg ไม่ทำงาน อาจหาไฟล์ไม่เจอ หรือเปิดรันไฟล์ตรงๆ โดยไม่ผ่าน Live Server");
+                document.getElementById('status').innerText = "ข้อผิดพลาด: ไลบรารี FFmpeg ไม่พร้อม";
+            } else {
+                const { createFFmpeg } = FFmpeg;
+                ffmpeg = createFFmpeg({ log: true });
+            }
+        });
+
+        async function processVideo() {
+            const statusDiv = document.getElementById('status');
+            const systemBar = document.getElementById('system-progress-bar');
+            const videoBar = document.getElementById('video-progress-bar');
+            const videoFile = document.getElementById('video-input').files[0];
+            const segmentDuration = document.getElementById('duration-input').value;
+
+            if (!videoFile) {
+                alert('กรุณาเลือกไฟล์วิดีโอก่อนครับ');
+                return;
+            }
+
+            if (typeof FFmpeg === 'undefined' || !ffmpeg) {
+                alert('❌ ไม่สามารถเริ่มทำงานได้ เนื่องจากระบบหลังบ้าน FFmpeg ไม่พร้อม');
+                return;
+            }
+
+            // ล้างหน้าต่างแสดงผลปุ่มเก่าออกไปก่อน (ถ้ามี)
+            document.getElementById('output-list').innerHTML = '';
+            
+            // รีเซ็ตและแสดงหลอดระบบ
+            systemBar.classList.remove('error-bar');
+            systemBar.style.width = '0%';
+            systemBar.innerText = '0%';
+            document.getElementById('system-progress-container').style.display = 'block';
+            document.getElementById('video-progress-container').style.display = 'none';
+            
+            statusDiv.innerText = "กำลังเชื่อมต่อระบบ FFmpeg...";
+
+            // [แก้ไขแล้ว] แก้ไขจุดบกพร่องของ setInterval จากเดิมที่หลุดไวยากรณ์
+            let sysProgress = 0;
+            const sysInterval = setInterval(() => {
+                if (sysProgress < 90) {
+                    sysProgress += 5;
+                    systemBar.style.width = sysProgress + '%';
+                    systemBar.innerText = sysProgress + '%';
+                }
+            }, 50);
+
+            try {
+                // ดักจับตัวชี้วัดความก้าวหน้าการสับไฟล์
+                ffmpeg.setProgress(({ ratio }) => {
+                    if (ratio >= 0 && ratio <= 1) {
+                        const percentage = Math.round(ratio * 100);
+                        videoBar.style.width = percentage + '%';
+                        videoBar.innerText = percentage + '%';
+                    }
+                });
+
+                // สั่งให้ระบบ FFmpeg.wasm เริ่มโหลดเข้าแรม
+                if (!ffmpeg.isLoaded()) {
+                    await ffmpeg.load();
+                }
+                
+                // โหลดเสร็จเรียบร้อย ขยับหลอดระบบไป 100%
+                clearInterval(sysInterval);
+                systemBar.style.width = '100%';
+                systemBar.innerText = '100%';
+                statusDiv.innerText = "ระบบพร้อมทำงาน นำไฟล์เข้าหน่วยความจำชั่วคราว...";
+
+                // อ่านไฟล์วิดีโอจากเครื่องผู้ใช้ เข้าไปในระบบไฟล์เสมือนของ FFmpeg
+                const { fetchFile } = FFmpeg;
+                ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
+
+                // แสดงหลอดสับวิดีโอ
+                videoBar.style.width = '0%';
+                videoBar.innerText = '0%';
+                document.getElementById('video-progress-container').style.display = 'block';
+                statusDiv.innerText = "กำลังหั่นวิดีโอ... กรุณารอสักครู่ (ห้ามปิดหน้าเว็บ)";
+
+                // สั่งตัดวิดีโอแบบลอกข้อมูลสตรีมตรงๆ ไม่เรนเดอร์ภาพใหม่เพื่อให้เร็วที่สุด
+                await ffmpeg.run(
+                    '-i', 'input.mp4',
+                    '-c', 'copy',
+                    '-map', '0',
+                    '-segment_time', segmentDuration,
+                    '-f', 'segment',
+                    '-reset_timestamps', '1',
+                    'output_%d.mp4'
+                );
+
+                statusDiv.innerText = "ตัดวิดีโอเสร็จสมบูรณ์ 100%!";
+                videoBar.style.width = '100%';
+                videoBar.innerText = '100%';
+                
+                // ปล่อยปุ่มดาวน์โหลดออกหน้าจอ
+                generateDownloadButtons();
+
+            } catch (error) {
+                // จัดการเมื่อเกิดข้อผิดพลาดค้างคลาหรือระบบความปลอดภัยเบราว์เซอร์บล็อก
+                clearInterval(sysInterval);
+                systemBar.classList.add('error-bar');
+                systemBar.innerText = "ล้มเหลว";
+                statusDiv.innerText = "❌ เกิดข้อผิดพลาดร้ายแรงในระบบประมวลผล";
+                
+                alert("เกิดข้อผิดพลาด: เบราว์เซอร์ในมือถือบล็อกการทำงาน (ติดปัญหา SharedArrayBuffer / CORS) แนะนำให้ลองอัปโหลดขึ้นบริการเซิร์ฟเวอร์จริงเช่น Netlify เพื่อเปิดใช้งานเต็มรูปแบบ");
+                console.error(error);
+            }
+        }
+
+        function generateDownloadButtons() {
+            const outputList = document.getElementById('output-list');
+            outputList.innerHTML = '<h3>ไฟล์ที่ตัดเสร็จแล้ว:</h3>';
+
+            let i = 0;
+            while (true) {
+                try {
+                    const fileName = `output_${i}.mp4`;
+                    const data = ffmpeg.FS('readFile', fileName);
+                    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+                    const url = URL.createObjectURL(videoBlob);
+
+                    const clipDiv = document.createElement('div');
+                    clipDiv.style.margin = "10px 0";
+
+                    const btn = document.createElement('button');
+                    btn.innerText = `ดาวน์โหลดคลิปที่ ${i + 1}`;
+                    btn.style.padding = "8px 15px";
+                    btn.style.fontSize = "14px";
+                    btn.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `clip_${i + 1}.mp4`;
+                        a.click();
+                    };
+
+                    clipDiv.appendChild(btn);
+                    outputList.appendChild(clipDiv);
+                    i++;
+                } catch (e) {
+                    // หากวนหาไฟล์ชื่อถัดไปไม่เจอแล้ว ให้จบการทำลูปสร้างปุ่มทันที
+                    break;
+                }
+            }
+            
+            if(i === 0) {
+                outputList.innerHTML += '<p style="color:red;">ไม่มีไฟล์ผลลัพธ์เกิดขึ้น กรุณาเช็กความถูกต้องของไฟล์วิดีโอต้นฉบับ</p>';
+            }
+        }
+    </script>
+</body>
+</html>
