@@ -81,8 +81,14 @@
             font-size: 14px;
         }
 
+        /* 🆕 จัดระเบียบช่องกรอกตัวเลขคู่กับตัวเลือกหน่วยเวลา */
+        .time-input-container {
+            display: flex;
+            gap: 10px;
+        }
+
         input[type="number"] {
-            width: 100%;
+            flex: 2;
             background: #2c2c2e;
             border: 1px solid #48484a;
             padding: 12px;
@@ -93,8 +99,20 @@
             box-sizing: border-box;
         }
 
-        input[type="number"]:focus {
+        select {
+            flex: 1;
+            background: #2c2c2e;
+            border: 1px solid #48484a;
+            padding: 12px;
+            border-radius: 8px;
+            color: var(--text-color);
+            font-size: 14px;
+            font-weight: 600;
+            box-sizing: border-box;
             outline: none;
+        }
+
+        input[type="number"]:focus, select:focus {
             border-color: var(--accent-color);
         }
 
@@ -172,7 +190,6 @@
             margin-bottom: 12px;
         }
 
-        /* 🆕 จัดโครงสร้างกล่องปุ่มแบบคู่ (ดาวน์โหลด + แชร์) */
         .clip-row {
             display: flex;
             gap: 10px;
@@ -229,8 +246,15 @@
         </div>
         
         <div class="form-group">
-            <label>แบ่งเป็นคลิปย่อยละ (วินาที)</label>
-            <input type="number" id="duration-input" value="60">
+            <label>แบ่งวิดีโอออกเป็นท่อนละ</label>
+            <div class="time-input-container">
+                <input type="number" id="duration-input" value="1" min="1">
+                <select id="unit-input">
+                    <option value="minutes" selected>นาที</option>
+                    <option value="seconds">วินาที</option>
+                    <option value="hours">ชั่วโมง</option>
+                </select>
+            </div>
         </div>
         
         <button class="btn-primary" onclick="processVideo()">เริ่มหั่นวิดีโอ</button>
@@ -273,11 +297,26 @@
             const systemBar = document.getElementById('system-progress-bar');
             const videoBar = document.getElementById('video-progress-bar');
             const videoFile = document.getElementById('video-input').files[0];
-            const segmentDuration = document.getElementById('duration-input').value;
+            
+            const inputValue = parseFloat(document.getElementById('duration-input').value);
+            const timeUnit = document.getElementById('unit-input').value;
 
             if (!videoFile) {
                 alert('กรุณาเลือกไฟล์วิดีโอก่อนครับ');
                 return;
+            }
+
+            if (isNaN(inputValue) || inputValue <= 0) {
+                alert('กรุณากรอกตัวเลขเวลาที่ถูกต้องและมากกว่า 0 ครับ');
+                return;
+            }
+
+            // 🆕 คำนวณแปลงหน่วยเวลาทั้งหมดให้กลายเป็น "วินาที" เพื่อส่งให้ FFmpeg
+            let segmentDurationInSeconds = inputValue;
+            if (timeUnit === 'minutes') {
+                segmentDurationInSeconds = inputValue * 60;
+            } else if (timeUnit === 'hours') {
+                segmentDurationInSeconds = inputValue * 3600;
             }
 
             if (!ffmpeg && typeof FFmpeg !== 'undefined') {
@@ -334,11 +373,12 @@
                 document.getElementById('video-progress-container').style.display = 'block';
                 statusDiv.innerText = "กำลังสับคลิปวิดีโอด้วยความเร็วสูง...";
 
+                // ใช้ค่าตัวแปรวินาทีที่คำนวณแปลงหน่วยแล้ว
                 await ffmpeg.run(
                     '-i', 'input.mp4',
                     '-c', 'copy',
                     '-map', '0',
-                    '-segment_time', segmentDuration,
+                    '-segment_time', String(segmentDurationInSeconds),
                     '-f', 'segment',
                     '-reset_timestamps', '1',
                     'output_%d.mp4'
@@ -359,7 +399,6 @@
             }
         }
 
-        // 🆕 ฟังก์ชันอัปเกรด: สร้างแถวที่มีทั้งปุ่มดาวน์โหลด และ ปุ่มแชร์ข้ามแอป
         function generateDownloadButtons() {
             const outputList = document.getElementById('output-list');
             outputList.innerHTML = '<h3>คลิปย่อยที่หั่นสำเร็จ:</h3>';
@@ -370,25 +409,20 @@
                     const fileName = `output_${i}.mp4`;
                     const data = ffmpeg.FS('readFile', fileName);
                     
-                    // แปลงข้อมูลแรมเสมือนเป็นไฟล์วิดีโอตัวจริง
                     const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
                     const url = URL.createObjectURL(videoBlob);
                     const currentClipIndex = i + 1;
 
-                    // สร้างไฟล์อ็อบเจกต์จริงเพื่อใช้กับระบบ Web Share API
                     const videoFile = new File([videoBlob], `clip_${currentClipIndex}.mp4`, { type: 'video/mp4' });
 
-                    // สร้างโครงสร้างแถว (Row)
                     const rowDiv = document.createElement('div');
                     rowDiv.className = 'clip-row';
 
-                    // ข้อความหัวข้อคลิป
                     const titleDiv = document.createElement('div');
                     titleDiv.className = 'clip-title';
                     titleDiv.innerText = `ท่อนที่ ${currentClipIndex}`;
                     rowDiv.appendChild(titleDiv);
 
-                    // 1. ปุ่มดาวน์โหลดลงเครื่อง
                     const dlBtn = document.createElement('button');
                     dlBtn.className = 'action-btn';
                     dlBtn.innerText = '💾';
@@ -401,12 +435,10 @@
                     };
                     rowDiv.appendChild(dlBtn);
 
-                    // 2. ปุ่มแชร์อัจฉริยะ (ส่งเข้าแอป TikTok / YouTube / Facebook ทันที)
                     const shareBtn = document.createElement('button');
                     shareBtn.className = 'action-btn share-btn';
                     shareBtn.innerText = '📤 แชร์';
                     shareBtn.onclick = async () => {
-                        // ตรวจสอบว่าเบราว์เซอร์และเครื่องมือถือรองรับการแชร์ไฟล์ไหม
                         if (navigator.canShare && navigator.canShare({ files: [videoFile] })) {
                             try {
                                 await navigator.share({
@@ -415,10 +447,10 @@
                                     text: 'หั่นคลิปเสร็จแล้ว เตรียมพร้อมโพสต์โซเชียล!'
                                 });
                             } catch (err) {
-                                console.log('ผู้ใช้ยกเลิกการแชร์ หรือแอปปลายทางไม่รองรับ', err);
+                                console.log('ผู้ใช้ยกเลิกการแชร์', err);
                             }
                         } else {
-                            alert('❌ มือถือหรือเบราว์เซอร์ของคุณไม่รองรับระบบแชร์ไฟล์ตรงๆ แนะนำให้กดปุ่มดาวน์โหลด (💾) แล้วนำไปโพสต์ด้วยตัวเองแทนครับ');
+                            alert('❌ มือถือหรือเบราว์เซอร์ของคุณไม่รองรับระบบแชร์ไฟล์ตรงๆ แนะนำให้กดปุ่มดาวน์โหลด (💾) แทนครับ');
                         }
                     };
                     rowDiv.appendChild(shareBtn);
