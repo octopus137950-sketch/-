@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLIP SPLITTER PRO</title>
+    
+    <!-- นำเข้า Service Worker และ FFmpeg สำหรับตัดวิดีโอบนเบราว์เซอร์มือถือ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
+    <script src="./ffmpeg.min.js" onerror="handleScriptError()"></script>
+
+    <style>
+        :root {
+            --bg-color: #0b0b0c;
+            --card-color: #16161a;
+            --text-color: #ffffff;
+            --text-muted: #8e8e93;
+            --accent-color: #39ff14; /* เขียวนีออน */
+            --blue-color: #007aff;
+            --border-radius: 14px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+            background-color: var(--card-color);
+            padding: 24px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            box-sizing: border-box;
+            border: 1px solid #2c2c2e;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 20px;
+            font-weight: 800;
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 8px;
+            margin-bottom: 24px;
+        }
+
+        .form-group { margin-bottom: 20px; }
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            background: #2c2c2e;
+            padding: 12px;
+            border-radius: 8px;
+            color: var(--text-color);
+            border: 1px dashed #48484a;
+            box-sizing: border-box;
+        }
+
+        .time-splitter-group { display: flex; gap: 8px; }
+        .time-box {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #2c2c2e;
+            border: 1px solid #48484a;
+            border-radius: 8px;
+            padding: 6px;
+        }
+        .time-box span { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+        .time-box input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            outline: none;
+        }
+        .time-box:focus-within { border-color: var(--accent-color); }
+
+        .btn-primary {
+            width: 100%;
+            background-color: var(--text-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn-primary:active { transform: scale(0.98); }
+
+        #status {
+            background-color: #2c2c2e;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: center;
+            margin: 20px 0;
+            color: var(--accent-color);
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .progress-container {
+            width: 100%;
+            background-color: #2c2c2e;
+            border-radius: 20px;
+            margin: 15px 0;
+            display: none;
+            overflow: hidden;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 18px;
+            background-color: var(--accent-color);
+            text-align: center;
+            line-height: 18px;
+            color: #000000;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .clip-card {
+            background: #1c1c1e;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #2c2c2e;
+            margin-bottom: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .clip-info-row { display: flex; align-items: center; justify-content: space-between; }
+        .clip-title { font-size: 15px; font-weight: 700; }
+        .clip-actions { display: flex; gap: 8px; }
+        .preview-video { width: 100%; max-height: 220px; border-radius: 8px; background: #000; }
+
+        .action-btn {
+            background-color: #2c2c2e;
+            color: var(--text-color);
+            border: 1px solid #48484a;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .share-btn { background-color: var(--blue-color); border-color: var(--blue-color); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>CLIP SPLITTER PRO</h2>
+        
+        <div class="form-group">
+            <label>เลือกไฟล์วิดีโอกจากมือถือ</label>
+            <input type="file" id="video-input" accept="video/*">
+        </div>
+        
+        <div class="form-group">
+            <label>ตั้งค่าความยาวคลิปย่อย</label>
+            <div class="time-splitter-group">
+                <div class="time-box"><span>ชั่วโมง</span><input type="number" id="input-hours" value="0"></div>
+                <div class="time-box"><span>นาที</span><input type="number" id="input-minutes" value="1"></div>
+                <div class="time-box"><span>วินาที</span><input type="number" id="input-seconds" value="30"></div>
+            </div>
+        </div>
+        
+        <button class="btn-primary" onclick="processVideo()">เริ่มหั่นวิดีโอ</button>
+
+        <div id="status">สถานะ: รอสั่งงาน</div>
+
+        <div id="video-progress-container" class="progress-container">
+            <div id="video-progress-bar" class="progress-bar">0%</div>
+        </div>
+
+        <div id="output-list"></div>
+    </div>
+
+    <script>
+        let ffmpeg = null;
+        let currentVideoFile = null;
+
+        function handleScriptError() {
+            alert("❌ ไม่พบไฟล์ ffmpeg.min.js ในโฟลเดอร์ กรุณาตรวจสอบอีกครั้งครับ");
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof FFmpeg !== 'undefined') {
+                const { createFFmpeg } = FFmpeg;
+                ffmpeg = createFFmpeg({ log: true });
+                document.getElementById('status').innerText = "สถานะ: ระบบพร้อมทำงาน";
+            }
+        });
+
+        document.getElementById('video-input').addEventListener('change', (e) => {
+            currentVideoFile = e.target.files[0];
+            if (currentVideoFile) {
+                document.getElementById('status').innerText = "เลือกไฟล์วิดีโอแล้ว! ตั้งเวลาแล้วกดปุ่มเริ่มหั่นได้เลย";
+            }
+        });
+
+        async function processVideo() {
+            const statusDiv = document.getElementById('status');
+            const videoBar = document.getElementById('video-progress-bar');
+            
+            const hrs = parseInt(document.getElementById('input-hours').value) || 0;
+            const mins = parseInt(document.getElementById('input-minutes').value) || 0;
+            const secs = parseInt(document.getElementById('input-seconds').value) || 0;
+            const totalDurationInSeconds = (hrs * 3600) + (mins * 60) + secs;
+
+            if (!currentVideoFile) { alert('กรุณาเลือกไฟล์วิดีโอก่อนครับ'); return; }
+            if (totalDurationInSeconds <= 0) { alert('กรุณาตั้งความยาวคลิปย่อยให้มากกว่า 0 วินาทีครับ'); return; }
+
+            document.getElementById('output-list').innerHTML = '';
+            document.getElementById('video-progress-container').style.display = 'block';
+            statusDiv.innerText = "กำลังประมวลผลและสับแบ่งวิดีโอในเครื่อง...";
+
+            try {
+                // โหลดระบบ FFmpeg ถ้ายังไม่ได้โหลด
+                if (!ffmpeg.isLoaded()) await ffmpeg.load();
+                
+                const { fetchFile } = FFmpeg;
+                // บันทึกไฟล์ลงในระบบจำลองของเบราว์เซอร์
+                ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentVideoFile));
+
+                // คำสั่ง FFmpeg สำหรับหั่นคลิปแบบรวดเร็วโดยไม่แปลงรหัสใหม่ (Copy Stream)
+                const ffmpegArgs = [
+                    '-i', 'input.mp4',
+                    '-c', 'copy',
+                    '-map', '0',
+                    '-segment_time', String(totalDurationInSeconds),
+                    '-f', 'segment',
+                    '-reset_timestamps', '1',
+                    'output_%d.mp4'
+                ];
+
+                // อัปเดตแถบความคืบหน้า (Progress Bar)
+                ffmpeg.setProgress(({ ratio }) => {
+                    const percentage = Math.min(Math.round(ratio * 100), 100);
+                    videoBar.style.width = percentage + '%';
+                    videoBar.innerText = percentage + '%';
+                });
+
+                // สั่งรัน FFmpeg
+                await ffmpeg.run(...ffmpegArgs);
+
+                statusDiv.innerText = "⚡ หั่นไฟล์วิดีโอสำเร็จเรียบร้อยแล้ว!";
+                generateDownloadButtons();
+
+            } catch (error) {
+                statusDiv.innerText = "❌ เกิดข้อผิดพลาดในการหั่นคลิป";
+                console.error(error);
+            }
+        }
+
+        function generateDownloadButtons() {
+            const outputList = document.getElementById('output-list');
+            outputList.innerHTML = '<h3>คลิปย่อยที่หั่นสำเร็จ:</h3>';
+            let i = 0;
+            
+            while (true) {
+                try {
+                    const fileName = `output_${i}.mp4`;
+                    const data = ffmpeg.FS('readFile', fileName);
+                    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+                    const url = URL.createObjectURL(videoBlob);
+                    const currentClipIndex = i + 1;
+                    const videoFile = new File([videoBlob], `clip_${currentClipIndex}.mp4`, { type: 'video/mp4' });
+
+                    const cardDiv = document.createElement('div');
+                    cardDiv.className = 'clip-card';
+
+                    const infoRow = document.createElement('div');
+                    infoRow.className = 'clip-info-row';
+
+                    const titleDiv = document.createElement('div');
+                    titleDiv.className = 'clip-title';
+                    titleDiv.innerText = `🎬 ท่อนที่ ${currentClipIndex}`;
+                    infoRow.appendChild(titleDiv);
+
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'clip-actions';
+
+                    // ปุ่มเซฟลงเครื่อง
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'action-btn';
+                    dlBtn.innerText = '💾 ดาวน์โหลด';
+                    dlBtn.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `split_clip_${currentClipIndex}.mp4`;
+                        a.click();
+                    };
+                    actionsDiv.appendChild(dlBtn);
+
+                    // ปุ่มกดแชร์ตรงเข้าแอปอื่น
+                    const shareBtn = document.createElement('button');
+                    shareBtn.className = 'action-btn share-btn';
+                    shareBtn.innerText = '📤 แชร์';
+                    shareBtn.onclick = async () => {
+                        if (navigator.canShare && navigator.canShare({ files: [videoFile] })) {
+                            try { await navigator.share({ files: [videoFile] }); } catch (err) {}
+                        } else { alert('❌ มือถือไม่รองรับระบบแชร์ตรง สามารถกดปุ่มดาวน์โหลดแทนได้เลยครับ'); }
+                    };
+                    actionsDiv.appendChild(shareBtn);
+                    infoRow.appendChild(actionsDiv);
+                    cardDiv.appendChild(infoRow);
+
+                    // วิดีโอพรีวิว
+                    const videoElement = document.createElement('video');
+                    videoElement.className = 'preview-video';
+                    videoElement.src = url;
+                    videoElement.controls = true;
+                    cardDiv.appendChild(videoElement);
+
+                    outputList.appendChild(cardDiv);
+                    i++;
+                } catch (e) { 
+                    // ถ้าอ่านไฟล์ถัดไปไม่ได้ (หมดคลิปแล้ว) ให้หยุดทำงาน loop
+                    break; 
+                }
+            }
+        }
+    </script>
+</body>
+</html>
