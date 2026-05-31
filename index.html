@@ -7,6 +7,8 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
     <script src="./ffmpeg.min.js" onerror="handleScriptError()"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js"></script>
 
     <style>
         :root {
@@ -246,73 +248,51 @@
             }
         });
 
-        // 🧠 ฟังก์ชันแกะซับเวอร์ชันอัปเดตช่องทาง API มั่นคงสูงสุด ไม่พึ่งพาสคริปต์ภายนอก
+        // 🧠 ฟังก์ชันแกะซับร่วมกับระบบคลาวด์ Gradio ตรวจสอบโครงสร้างออบเจกต์เรียกใช้แบบละเอียด
         async function runAiSubtitle() {
             if (!currentVideoFile) return;
             const statusDiv = document.getElementById('status');
-            statusDiv.innerText = "🚀 กำลังสกัดเสียงและส่งข้อมูลไปแปลงเป็นข้อความ (ขั้นตอนนี้ใช้เวลาประมาณ 1-2 นาที)...";
+            statusDiv.innerText = "🚀 กำลังสกัดเสียงและส่งต่อให้ AI ประมวลผลข้อความ...";
             document.getElementById('ai-btn').disabled = true;
 
             try {
                 if (!ffmpeg.isLoaded()) await ffmpeg.load();
                 const { fetchFile } = FFmpeg;
                 
-                // 1. ดึงเฉพาะเสียงออกจากวิดีโอ
+                // 1. สกัดเสียงออกเป็นไฟล์ .mp3
                 ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(currentVideoFile));
                 await ffmpeg.run('-i', 'source.mp4', '-vn', '-acodec', 'libmp3lame', 'audio.mp3');
                 const audioData = ffmpeg.FS('readFile', 'audio.mp3');
-                const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
+                const audioBlob = new Blob([data => audioData.buffer], { type: 'audio/mp3' });
 
-                // 🌐 นี่ครับฝัง URL ของแอปคุณเข้าท่อรับส่งข้อมูลหลักตรงๆ เลย!
-                const HF_API_URL = "https://mushroom27-thai-whisper-sub.hf.space/api/predict";
-
-                // 2. แปลงเป็นข้อความดิบเพื่อความปลอดภัยในการส่งข้อมูล
-                const base64Audio = await blobToBase64(audioBlob);
-
-                // 3. ยิง POST หา Gradio API โดยตรง
-                const response = await fetch(HF_API_URL, {
-                    method: "POST",
-                    headers: { 
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        data: [
-                            {
-                                "data": base64Audio,
-                                "name": "audio.mp3"
-                            }
-                        ]
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                // 2. ป้องกันบั๊กนิ่งเงียบด้วยการเรียกใช้ Object หลักของแอปคลาวด์ (Gradio)
+                const gradioClient = window.Gradio || window.gradio;
+                if (!gradioClient) {
+                    throw new Error("ระบบตรวจไม่พบโมดูลเครือข่าย Gradio กรุณารีเฟรชหน้าเว็บอีกครั้ง");
                 }
 
-                const jsonResult = await response.json();
+                // 3. สั่งจองท่อเชื่อมต่อตรงเข้าพื้นที่หลังบ้านของคุณ
+                const app = await gradioClient.client("https://mushroom27-thai-whisper-sub.hf.space/");
                 
-                if (jsonResult.data && jsonResult.data[0]) {
-                    parsedSubtitles = jsonResult.data[0]; 
+                // 4. สั่งรันฟังก์ชันทำนายข้อความ
+                const result = await app.predict("/predict", [
+                    audioBlob
+                ]);
+
+                if (result && result.data && result.data[0]) {
+                    parsedSubtitles = result.data[0]; 
                     statusDiv.innerText = `✨ AI แกะซับเสร็จสิ้น! พบทั้งหมด ${parsedSubtitles.length} ประโยค พร้อมฝังลงคลิปตอนกดหั่นแล้วครับ`;
                     alert("แกะเสียงสำเร็จแล้ว! ตอนนี้สามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' ได้เลยครับ");
                 } else {
-                    statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ตอบกลับมาสำเร็จ แต่ไม่พบคู่ข้อมูลข้อความซับ";
+                    statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ประมวลผลสำเร็จ แต่ส่งชุดข้อมูลกลับมาไม่ตรงโครงสร้างซับไตเติล";
                     document.getElementById('ai-btn').disabled = false;
                 }
 
             } catch (err) {
                 console.error(err);
-                statusDiv.innerText = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message}`;
+                statusDiv.innerText = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message || err}`;
                 document.getElementById('ai-btn').disabled = false;
             }
-        }
-
-        function blobToBase64(blob) {
-            return new Promise((resolve, _) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
-            });
         }
 
         async function processVideo() {
