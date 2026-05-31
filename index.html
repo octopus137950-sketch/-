@@ -3,84 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VIDEO STUDIO PRO</title>
-    <script src="./coi-serviceworker.min.js"></script>
-    <script src="./ffmpeg.min.js"></script>
+    <title>VIDEO TOOLBOX | หน้าหลัก</title>
     <style>
-        :root { --bg: #0b0b0c; --card: #16161a; --text: #fff; --accent: #39ff14; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        
-        .studio-header { text-align: center; margin-bottom: 20px; }
-        
-        /* ระบบ Tab เลือกเครื่องมือ */
-        .tabs { display: flex; gap: 5px; overflow-x: auto; margin-bottom: 20px; padding-bottom: 10px; }
-        .tab-btn { background: #2c2c2e; border: none; color: #fff; padding: 10px 15px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
-        .tab-btn.active { background: var(--accent); color: #000; font-weight: bold; }
+        :root {
+            --bg-color: #0b0b0c;
+            --card-color: #16161a;
+            --text-color: #ffffff;
+            --text-muted: #8e8e93;
+            --accent-color: #39ff14;
+            --border-radius: 14px;
+        }
 
-        .tool-panel { background: var(--card); padding: 20px; border-radius: 14px; border: 1px solid #2c2c2e; }
-        
-        input[type="file"] { width: 100%; background: #2c2c2e; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #48484a; }
-        .btn-run { width: 100%; background: var(--accent); color: #000; border: none; padding: 15px; border-radius: 8px; font-weight: bold; margin-top: 10px; }
-        
-        #status { margin-top: 15px; font-size: 14px; color: var(--accent); text-align: center; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { font-size: 28px; font-weight: 800; letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase; }
+        .header p { color: var(--text-muted); font-size: 14px; margin: 0; }
+
+        .toolbox-grid {
+            width: 100%;
+            max-width: 500px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .tool-card {
+            background-color: var(--card-color);
+            border: 1px solid #2c2c2e;
+            border-radius: var(--border-radius);
+            padding: 24px;
+            text-decoration: none;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+            display: block;
+        }
+
+        .tool-card:hover { border-color: var(--accent-color); transform: translateY(-2px); }
+        .tool-card:active { transform: scale(0.98); }
+
+        .tool-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; }
+        .tool-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+        .badge { background: #2c2c2e; color: var(--accent-color); font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; margin-left: auto; text-transform: uppercase; }
     </style>
 </head>
 <body>
 
-    <div class="studio-header">
-        <h1>VIDEO STUDIO PRO</h1>
+    <div class="header">
+        <h1>Video Toolbox</h1>
+        <p>เครื่องมือจัดการไฟล์วิดีโอแบบออฟไลน์ 100%</p>
     </div>
 
-    <!-- แถบเมนูเลือกเครื่องมือ -->
-    <div class="tabs" id="tabs">
-        <button class="tab-btn active" onclick="switchTool('splitter')">หั่นคลิป</button>
-        <button class="tab-btn" onclick="switchTool('extractor')">ดึงเสียง MP3</button>
-        <button class="tab-btn" onclick="switchTool('gif')">ทำภาพ GIF</button>
-        <button class="tab-btn" onclick="switchTool('compress')">บีบอัด</button>
+    <div class="toolbox-grid">
+        <a href="splitter.html" class="tool-card">
+            <div class="tool-title">🎬 Video Splitter <span class="badge">หั่นคลิป</span></div>
+            <div class="tool-desc">สับแบ่งวิดีโอไฟล์ใหญ่ให้เป็นท่อนย่อยๆ ตั้งเวลาเริ่มและจบได้แม่นยำ</div>
+        </a>
+
+        <a href="extractor.html" class="tool-card">
+            <div class="tool-title">🎵 MP3 Extractor <span class="badge">ดึงเสียง</span></div>
+            <div class="tool-desc">ดึงสัญญาณเสียงออกจากวิดีโอ แปลงเป็นไฟล์ MP3 คุณภาพสูง</div>
+        </a>
+
+        <a href="gifmaker.html" class="tool-card">
+            <div class="tool-title">🖼️ GIF Maker <span class="badge">ทำ GIF</span></div>
+            <div class="tool-desc">เลือกช่วงเวลาในวิดีโอเพื่อแปลงเป็นภาพเคลื่อนไหวดุ๊กดิ๊ก</div>
+        </a>
+
+        <a href="compressor.html" class="tool-card">
+            <div class="tool-title">📉 Video Compressor <span class="badge">บีบอัด</span></div>
+            <div class="tool-desc">ลดขนาดไฟล์วิดีโอให้เล็กลง เพื่อความสะดวกในการส่งงานหรืออัปโหลด</div>
+        </a>
     </div>
 
-    <!-- แผงควบคุมเครื่องมือ -->
-    <div class="tool-panel">
-        <div id="tool-content">
-            <!-- เนื้อหาจะถูกโหลดมาตรงนี้ -->
-        </div>
-        <div id="status">สถานะ: เลือกเครื่องมือด้านบนเพื่อเริ่มใช้งาน</div>
-    </div>
-
-    <script>
-        let ffmpeg = null;
-        async function loadFFmpeg() {
-            if (!ffmpeg) {
-                ffmpeg = FFmpeg.createFFmpeg({ log: true });
-                await ffmpeg.load();
-            }
-        }
-
-        function switchTool(tool) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            const content = document.getElementById('tool-content');
-            if(tool === 'splitter') {
-                content.innerHTML = `<label>ความยาวคลิป (วินาที)</label><input type="number" id="val1" value="30">`;
-            } else if(tool === 'extractor') {
-                content.innerHTML = `<p>คลิกเพื่อดึงเสียงออกจากวิดีโอเป็น MP3</p>`;
-            } else if(tool === 'gif') {
-                content.innerHTML = `<label>ช่วงเวลา (วินาที)</label><input type="number" id="val1" value="3">`;
-            } else if(tool === 'compress') {
-                content.innerHTML = `<label>ระดับความคมชัด (1-50)</label><input type="number" id="val1" value="28">`;
-            }
-            content.innerHTML += `<input type="file" id="vid-input"><button class="btn-run" onclick="runTool('${tool}')">เริ่มประมวลผล</button>`;
-        }
-
-        async function runTool(tool) {
-            await loadFFmpeg();
-            document.getElementById('status').innerText = "กำลังประมวลผล... รอสักครู่";
-            // ตรงนี้จะเป็นส่วนของ logic ffmpeg หลักที่เอาไปรันตาม tool ที่เลือก
-        }
-
-        // เริ่มต้นให้แสดงหน้าหั่นคลิป
-        switchTool('splitter');
-    </script>
 </body>
 </html>
