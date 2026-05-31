@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Video Splitter Pro</title>
+    <title>CLIP SPLITTER PRO + AI SUB</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
-    
     <script src="./ffmpeg.min.js" onerror="handleScriptError()"></script>
 
     <style>
-        /* 🎨 แต่งหน้าเว็บสไตล์ Modern Streetwear (Dark Mode / Neon Green Accent) */
         :root {
             --bg-color: #0b0b0c;
             --card-color: #16161a;
@@ -18,12 +16,13 @@
             --text-muted: #8e8e93;
             --accent-color: #39ff14; /* เขียวนีออน */
             --blue-color: #007aff;
+            --purple-color: #af52de; /* สีม่วงสำหรับปุ่ม AI */
             --error-color: #ff3b30;
             --border-radius: 14px;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
@@ -46,20 +45,15 @@
 
         h2 {
             margin-top: 0;
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 800;
-            letter-spacing: -0.5px;
             text-transform: uppercase;
             border-bottom: 2px solid var(--accent-color);
             padding-bottom: 8px;
             margin-bottom: 24px;
-            color: var(--text-color);
         }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
-
+        .form-group { margin-bottom: 20px; }
         label {
             display: block;
             font-size: 13px;
@@ -67,7 +61,6 @@
             color: var(--text-muted);
             margin-bottom: 8px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
         input[type="file"] {
@@ -78,14 +71,9 @@
             color: var(--text-color);
             border: 1px dashed #48484a;
             box-sizing: border-box;
-            font-size: 14px;
         }
 
-        .time-splitter-group {
-            display: flex;
-            gap: 8px;
-        }
-
+        .time-splitter-group { display: flex; gap: 8px; }
         .time-box {
             flex: 1;
             display: flex;
@@ -96,16 +84,8 @@
             border-radius: 8px;
             padding: 6px;
         }
-
-        .time-box span {
-            font-size: 10px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            font-weight: bold;
-            margin-bottom: 4px;
-        }
-
-        .time-box input[type="number"] {
+        .time-box span { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+        .time-box input {
             width: 100%;
             background: transparent;
             border: none;
@@ -113,13 +93,9 @@
             font-size: 16px;
             font-weight: bold;
             text-align: center;
-            padding: 4px 0;
             outline: none;
         }
-
-        .time-box:focus-within {
-            border-color: var(--accent-color);
-        }
+        .time-box:focus-within { border-color: var(--accent-color); }
 
         .btn-primary {
             width: 100%;
@@ -131,16 +107,28 @@
             font-size: 16px;
             font-weight: 700;
             cursor: pointer;
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
             margin-top: 10px;
         }
+        .btn-primary:active { transform: scale(0.98); }
 
-        .btn-primary:active {
-            transform: scale(0.98);
-            opacity: 0.9;
+        /* ปุ่มโหลดซับสไตล์ AI */
+        .btn-ai {
+            width: 100%;
+            background-color: var(--purple-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
+        .btn-ai:disabled { opacity: 0.5; cursor: not-allowed; }
 
         #status {
             background-color: #2c2c2e;
@@ -160,9 +148,7 @@
             margin: 15px 0;
             display: none;
             overflow: hidden;
-            border: 1px solid #48484a;
         }
-
         .progress-bar {
             width: 0%;
             height: 18px;
@@ -172,30 +158,9 @@
             color: white;
             font-size: 11px;
             font-weight: 700;
-            transition: width 0.1s linear;
         }
+        .video-bar { background-color: var(--accent-color); color: #000000; }
 
-        .video-bar { 
-            background-color: var(--accent-color); 
-            color: #000000;
-        }
-        
-        .error-bar { 
-            background-color: var(--error-color) !important; 
-            color: white;
-        }
-
-        #output-list {
-            margin-top: 25px;
-        }
-
-        #output-list h3 {
-            font-size: 16px;
-            color: var(--text-muted);
-            margin-bottom: 12px;
-        }
-
-        /* 🆕 ปรับแต่งกล่องแถวผลลัพธ์ให้รองรับการแสดงผลวิดีโอแนวตั้งแบบยืดหยุ่น */
         .clip-card {
             background: #1c1c1e;
             padding: 12px;
@@ -206,33 +171,10 @@
             flex-direction: column;
             gap: 10px;
         }
-
-        .clip-info-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .clip-title {
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--text-color);
-        }
-
-        .clip-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        /* 🆕 ปรับแต่งสไตล์เครื่องเล่นวิดีโอตัวอย่าง */
-        .preview-video {
-            width: 100%;
-            max-height: 220px;
-            border-radius: 8px;
-            background-color: #000000;
-            border: 1px solid #2c2c2e;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
-        }
+        .clip-info-row { display: flex; align-items: center; justify-content: space-between; }
+        .clip-title { font-size: 15px; font-weight: 700; }
+        .clip-actions { display: flex; gap: 8px; }
+        .preview-video { width: 100%; max-height: 220px; border-radius: 8px; background: #000; }
 
         .action-btn {
             background-color: #2c2c2e;
@@ -241,33 +183,15 @@
             padding: 10px 14px;
             border-radius: 8px;
             font-size: 14px;
-            font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 4px;
         }
-
-        .action-btn:active {
-            background-color: #3a3a3c;
-            border-color: var(--accent-color);
-        }
-
-        .share-btn {
-            background-color: var(--blue-color);
-            border-color: var(--blue-color);
-        }
-        
-        .share-btn:active {
-            background-color: #0051d4;
-        }
+        .share-btn { background-color: var(--blue-color); border-color: var(--blue-color); }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>CLIP SPLITTER PRO</h2>
+        <h2>CLIP SPLITTER + AI SUB</h2>
         
         <div class="form-group">
             <label>เลือกไฟล์วิดีโอกจากมือถือ</label>
@@ -275,34 +199,23 @@
         </div>
         
         <div class="form-group">
-            <label>ตั้งค่าความยาวคลิปย่อยที่ต้องการหั่น</label>
+            <label>ตั้งค่าความยาวคลิปย่อย</label>
             <div class="time-splitter-group">
-                <div class="time-box">
-                    <span>ชั่วโมง</span>
-                    <input type="number" id="input-hours" value="0" min="0">
-                </div>
-                <div class="time-box">
-                    <span>นาที</span>
-                    <input type="number" id="input-minutes" value="1" min="0" max="59">
-                </div>
-                <div class="time-box">
-                    <span>วินาที</span>
-                    <input type="number" id="input-seconds" value="30" min="0" max="59">
-                </div>
+                <div class="time-box"><span>ชั่วโมง</span><input type="number" id="input-hours" value="0"></div>
+                <div class="time-box"><span>นาที</span><input type="number" id="input-minutes" value="1"></div>
+                <div class="time-box"><span>วินาที</span><input type="number" id="input-seconds" value="30"></div>
             </div>
         </div>
         
         <button class="btn-primary" onclick="processVideo()">เริ่มหั่นวิดีโอ</button>
+        <button id="ai-btn" class="btn-ai" onclick="runAiSubtitle()" disabled>✨ แกะซับออโต้ด้วย AI หลังบ้าน</button>
 
         <div id="status">สถานะ: รอสั่งงาน</div>
 
         <div id="system-progress-container" class="progress-container">
-            <div style="padding: 6px 12px; font-size: 11px; color: var(--text-muted);">SYSTEM BOOTING:</div>
             <div id="system-progress-bar" class="progress-bar">0%</div>
         </div>
-
         <div id="video-progress-container" class="progress-container">
-            <div style="padding: 6px 12px; font-size: 11px; color: var(--text-muted);">SPLITTING VIDEO CPU:</div>
             <div id="video-progress-bar" class="progress-bar video-bar">0%</div>
         </div>
 
@@ -310,102 +223,129 @@
     </div>
 
     <script>
+        let ffmpeg = null;
+        let currentVideoFile = null;
+        let parsedSubtitles = []; // เก็บซับไตเติลที่แกะมาจาก AI
+
         function handleScriptError() {
-            alert("❌ ไม่พบไฟล์ ffmpeg.min.js ในโฟลเดอร์ของคุณ! กรุณาเช็กชื่อไฟล์อีกครั้ง");
-            document.getElementById('status').innerText = "ข้อผิดพลาด: หาไฟล์สคริปต์ไม่เจอ";
+            alert("❌ ไม่พบไฟล์ ffmpeg.min.js");
         }
 
-        let ffmpeg = null;
-        
         window.addEventListener('DOMContentLoaded', () => {
-            if (typeof FFmpeg === 'undefined') {
-                document.getElementById('status').innerText = "รอระบบความปลอดภัยเซ็ตอัพสักครู่...";
-            } else {
+            if (typeof FFmpeg !== 'undefined') {
                 const { createFFmpeg } = FFmpeg;
                 ffmpeg = createFFmpeg({ log: true });
                 document.getElementById('status').innerText = "สถานะ: ระบบพร้อมทำงาน";
             }
         });
 
+        // ตรวจจับเมื่อเลือกไฟล์วิดีโอ เพื่อเปิดให้กดปุ่ม AI ได้
+        document.getElementById('video-input').addEventListener('change', (e) => {
+            currentVideoFile = e.target.files[0];
+            if (currentVideoFile) {
+                document.getElementById('ai-btn').disabled = false;
+                document.getElementById('status').innerText = "เลือกไฟล์วิดีโอแล้ว! สามารถกดแกะซับ AI ก่อน หรือกดหั่นคลิปได้เลย";
+            }
+        });
+
+        // 🧠 ฟังก์ชันยิงข้ามโลกไปหา Hugging Face AI ของเราเพื่อดึงข้อความซับ
+        async function runAiSubtitle() {
+            if (!currentVideoFile) return;
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = "🚀 กำลังสกัดเสียงจากคลิปและส่งเข้าเซิร์ฟเวอร์ AI หลังบ้าน (อาจใช้เวลา 1-2 นาที)...";
+            document.getElementById('ai-btn').disabled = true;
+
+            try {
+                if (!ffmpeg.isLoaded()) await ffmpeg.load();
+                const { fetchFile } = FFmpeg;
+                
+                // 1. นำวิดีโอเข้าแรมเสมือน
+                ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(currentVideoFile));
+                
+                // 2. ดึงเฉพาะเสียงออกมาเป็นไฟล์ .mp3 เพื่อความรวดเร็วในการส่งข้อมูลออกอินเทอร์เน็ต
+                await ffmpeg.run('-i', 'source.mp4', '-vn', '-acodec', 'libmp3lame', 'audio.mp3');
+                const audioData = ffmpeg.FS('readFile', 'audio.mp3');
+                const audioBlob = new Blob([audioData.buffer], { type: 'audio/mp3' });
+
+                // 🚨 ตรงนี้สำคัญมาก!!! เปลี่ยน URL ด้านล่างนี้ให้เป็นลิงก์ API ของคุณที่คุณก๊อปปี้มา
+                const HF_API_URL = "https://mushroom27-thai-whisper-sub.hf.space/api/predict";
+
+                // 3. ยิงรูปแบบฟอร์มส่งให้ Hugging Face Gradio API
+                let formData = new FormData();
+                formData.append("data", audioBlob, "audio.mp3");
+
+                const response = await fetch(HF_API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ data: [ { "data": await blobToBase64(audioBlob), "name": "audio.mp3" } ] }),
+                    headers: { "Content-Type": "application/json" }
+                });
+
+                const jsonResult = await response.json();
+                // ข้อมูลคำตอบจาก Python ของเราจะอยู่ใน jsonResult.data[0]
+                parsedSubtitles = jsonResult.data[0]; 
+                
+                statusDiv.innerText = `✨ AI แกะซับเสร็จสิ้น! พบทั้งหมด ${parsedSubtitles.length} ประโยค พร้อมฝังลงคลิปตอนกดหั่นแล้วครับ`;
+                alert("แกะเสียงสำเร็จแล้ว! ตอนนี้คุณสามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' เพื่อดูผลลัพธ์พร้อมซับได้เลยครับ");
+
+            } catch (err) {
+                console.error(err);
+                statusDiv.innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ AI";
+                document.getElementById('ai-btn').disabled = false;
+            }
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve, _) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // 🎬 ฟังก์ชันสับคลิปวิดีโอ (ผสมโรงกับการฝังซับถ้ามีข้อความจาก AI)
         async function processVideo() {
             const statusDiv = document.getElementById('status');
-            const systemBar = document.getElementById('system-progress-bar');
             const videoBar = document.getElementById('video-progress-bar');
-            const videoFile = document.getElementById('video-input').files[0];
             
             const hrs = parseInt(document.getElementById('input-hours').value) || 0;
             const mins = parseInt(document.getElementById('input-minutes').value) || 0;
             const secs = parseInt(document.getElementById('input-seconds').value) || 0;
-
-            if (!videoFile) {
-                alert('กรุณาเลือกไฟล์วิดีโอก่อนครับ');
-                return;
-            }
-
             const totalDurationInSeconds = (hrs * 3600) + (mins * 60) + secs;
 
-            if (totalDurationInSeconds <= 0) {
-                alert('❌ กรุณาตั้งค่าความยาววิดีโอให้มากกว่า 0 วินาทีครับ');
-                return;
-            }
-
-            if (!ffmpeg && typeof FFmpeg !== 'undefined') {
-                const { createFFmpeg } = FFmpeg;
-                ffmpeg = createFFmpeg({ log: true });
-            }
-
-            if (typeof FFmpeg === 'undefined' || !ffmpeg) {
-                alert('❌ ระบบกำลังเซ็ตอัพเกราะความปลอดภัยอยู่ชั่วคราว ให้รอ 3 วินาทีแล้วกดใหม่อีกครั้งครับ');
-                return;
-            }
+            if (!currentVideoFile) { alert('กรุณาเลือกไฟล์วิดีโอก่อนครับ'); return; }
+            if (totalDurationInSeconds <= 0) { alert('กรุณาตั้งความยาวให้มากกว่า 0 วิ'); return; }
 
             document.getElementById('output-list').innerHTML = '';
-            systemBar.classList.remove('error-bar');
-            systemBar.style.width = '0%';
-            systemBar.innerText = '0%';
-            document.getElementById('system-progress-container').style.display = 'block';
-            document.getElementById('video-progress-container').style.display = 'none';
-            
-            statusDiv.innerText = "กำลังปลดล็อกเกาะป้องกันเบราว์เซอร์...";
-
-            let sysProgress = 0;
-            const sysInterval = setInterval(() => {
-                if (sysProgress < 90) {
-                    sysProgress += 5;
-                    systemBar.style.width = sysProgress + '%';
-                    systemBar.innerText = sysProgress + '%';
-                }
-            }, 40);
+            document.getElementById('video-progress-container').style.display = 'block';
+            statusDiv.innerText = "กำลังสับคลิปและฝังตัวอักษรลงเนื้อวิดีโอ...";
 
             try {
-                ffmpeg.setProgress(({ ratio }) => {
-                    if (ratio >= 0 && ratio <= 1) {
-                        const percentage = Math.round(ratio * 100);
-                        videoBar.style.width = percentage + '%';
-                        videoBar.innerText = percentage + '%';
-                    }
-                });
-
-                if (!ffmpeg.isLoaded()) {
-                    await ffmpeg.load();
-                }
-                
-                clearInterval(sysInterval);
-                systemBar.style.width = '100%';
-                systemBar.innerText = '100%';
-                statusDiv.innerText = "โหลดโมดูลสำเร็จ นำวิดีโอเข้าแรมเสมือน...";
-
+                if (!ffmpeg.isLoaded()) await ffmpeg.load();
                 const { fetchFile } = FFmpeg;
-                ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
+                ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentVideoFile));
 
-                videoBar.style.width = '0%';
-                videoBar.innerText = '0%';
-                document.getElementById('video-progress-container').style.display = 'block';
-                statusDiv.innerText = "กำลังสับคลิปวิดีโอด้วยความเร็วสูง...";
+                // 📝 ถ้าผู้ใช้เคยกดปุ่ม AI แล้วมีข้อมูลซับมา เราจะสร้างไฟล์ .srt แปะไว้ในระบบ
+                if (parsedSubtitles && parsedSubtitles.length > 0) {
+                    let srtContent = "";
+                    parsedSubtitles.forEach((item, index) => {
+                        srtContent += `${index + 1}\n`;
+                        srtContent += `${formatSrtTime(item.start)} --> ${formatSrtTime(item.end)}\n`;
+                        srtContent += `${item.text}\n\n`;
+                    });
+                    ffmpeg.FS('writeFile', 'sub.srt', new TextEncoder().encode(srtContent));
+                }
 
-                await ffmpeg.run(
-                    '-i', 'input.mp4',
-                    '-c', 'copy',
+                // 🛠️ วิ่งงานคำสั่ง FFmpeg
+                let ffmpegArgs = ['-i', 'input.mp4'];
+                
+                // ถ้าระบบตรวจเจอซับไตเติล ให้เปิดโหมดดึงฟอนต์และวาดซับลงไปในเนื้อทันที (Burn-in)
+                if (parsedSubtitles && parsedSubtitles.length > 0) {
+                    ffmpegArgs.push('-vf', 'subtitles=sub.srt:force_style=\'FontSize=16,PrimaryColour=&H0039FF14,Alignment=2\'');
+                } else {
+                    ffmpegArgs.push('-c', 'copy'); // ถ้าไม่มีซับ ให้ใช้โหมด copy ความเร็วสูงธรรมดา
+                }
+
+                ffmpegArgs.push(
                     '-map', '0',
                     '-segment_time', String(totalDurationInSeconds),
                     '-f', 'segment',
@@ -413,43 +353,48 @@
                     'output_%d.mp4'
                 );
 
-                statusDiv.innerText = "⚡ สับไฟล์เสร็จสิ้น!";
-                videoBar.style.width = '100%';
-                videoBar.innerText = '100%';
-                
+                ffmpeg.setProgress(({ ratio }) => {
+                    const percentage = Math.round(ratio * 100);
+                    videoBar.style.width = percentage + '%';
+                    videoBar.innerText = percentage + '%';
+                });
+
+                await ffmpeg.run(...ffmpegArgs);
+
+                statusDiv.innerText = "⚡ สับไฟล์และฝังซับสำเร็จ!";
                 generateDownloadButtons();
 
             } catch (error) {
-                clearInterval(sysInterval);
-                systemBar.classList.add('error-bar');
-                systemBar.innerText = "ล้มเหลว";
-                statusDiv.innerText = "❌ ระบบรักษาความปลอดภัยปฏิเสธการเข้าถึง";
+                statusDiv.innerText = "❌ เกิดข้อผิดพลาดในการประมวลผลคลิป";
                 console.error(error);
             }
         }
 
-        // 🆕 ฟังก์ชันเจเนอเรตการ์ดผลลัพธ์แบบใหม่: มีหน้าต่างเล่นวิดีโอเช็กตัวอย่างในตัว
+        // แปลงเวลาวินาทีธรรมดา ให้กลายเป็นฟอร์แมตไฟล์ซับแบบมาตรฐาน (00:00:00,000)
+        function formatSrtTime(seconds) {
+            let date = new Date(null);
+            date.setSeconds(seconds);
+            let ms = Math.floor((seconds % 1) * 1000);
+            let timeString = date.toISOString().substr(11, 8);
+            return `${timeString},${String(ms).padStart(3, '0')}`;
+        }
+
         function generateDownloadButtons() {
             const outputList = document.getElementById('output-list');
             outputList.innerHTML = '<h3>คลิปย่อยที่หั่นสำเร็จ:</h3>';
-
             let i = 0;
             while (true) {
                 try {
                     const fileName = `output_${i}.mp4`;
                     const data = ffmpeg.FS('readFile', fileName);
-                    
                     const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
                     const url = URL.createObjectURL(videoBlob);
                     const currentClipIndex = i + 1;
-
                     const videoFile = new File([videoBlob], `clip_${currentClipIndex}.mp4`, { type: 'video/mp4' });
 
-                    // สร้างกรอบ Card หลักสำหรับท่อนนั้นๆ
                     const cardDiv = document.createElement('div');
                     cardDiv.className = 'clip-card';
 
-                    // บรรทัดบนสุด: ชื่อท่อน + ปุ่มจัดการ
                     const infoRow = document.createElement('div');
                     infoRow.className = 'clip-info-row';
 
@@ -458,15 +403,12 @@
                     titleDiv.innerText = `🎬 ท่อนที่ ${currentClipIndex}`;
                     infoRow.appendChild(titleDiv);
 
-                    // กล่องเก็บปุ่มกด
                     const actionsDiv = document.createElement('div');
                     actionsDiv.className = 'clip-actions';
 
-                    // 1. ปุ่มดาวน์โหลด
                     const dlBtn = document.createElement('button');
                     dlBtn.className = 'action-btn';
                     dlBtn.innerText = '💾';
-                    dlBtn.title = 'ดาวน์โหลดลงเครื่อง';
                     dlBtn.onclick = () => {
                         const a = document.createElement('a');
                         a.href = url;
@@ -475,46 +417,27 @@
                     };
                     actionsDiv.appendChild(dlBtn);
 
-                    // 2. ปุ่มแชร์
                     const shareBtn = document.createElement('button');
                     shareBtn.className = 'action-btn share-btn';
                     shareBtn.innerText = '📤 แชร์';
                     shareBtn.onclick = async () => {
                         if (navigator.canShare && navigator.canShare({ files: [videoFile] })) {
-                            try {
-                                await navigator.share({
-                                    files: [videoFile],
-                                    title: `ส่งออกคลิปท่อนที่ ${currentClipIndex}`,
-                                    text: 'หั่นคลิปเสร็จแล้ว เตรียมพร้อมโพสต์โซเชียล!'
-                                });
-                            } catch (err) {
-                                console.log('ผู้ใช้ยกเลิกการแชร์', err);
-                            }
-                        } else {
-                            alert('❌ มือถือไม่รองรับระบบแชร์ไฟล์ตรงๆ แนะนำให้กดดาวน์โหลด (💾) แทนครับ');
-                        }
+                            try { await navigator.share({ files: [videoFile] }); } catch (err) {}
+                        } else { alert('❌ มือถือไม่รองรับแชร์ตรง กดดาวน์โหลดแทนได้เลยครับ'); }
                     };
                     actionsDiv.appendChild(shareBtn);
                     infoRow.appendChild(actionsDiv);
                     cardDiv.appendChild(infoRow);
 
-                    // 🆕 3. เพิ่มแท็กเครื่องเล่นวิดีโอตัวอย่าง (Video Preview Container)
                     const videoElement = document.createElement('video');
                     videoElement.className = 'preview-video';
                     videoElement.src = url;
-                    videoElement.controls = true; // เปิดแถบกด Play / Pause / ปรับเสียง / ขยายจอ
-                    videoElement.preload = 'metadata'; // โหลดเฉพาะข้อมูลเบื้องต้นเพื่อไม่ให้หนักเครื่อง
+                    videoElement.controls = true;
                     cardDiv.appendChild(videoElement);
 
                     outputList.appendChild(cardDiv);
                     i++;
-                } catch (e) {
-                    break;
-                }
-            }
-            
-            if(i === 0) {
-                outputList.innerHTML += '<p style="color:var(--error-color); font-size:14px; text-align:center;">ไม่พบไฟล์วิดีโอผลลัพธ์</p>';
+                } catch (e) { break; }
             }
         }
     </script>
