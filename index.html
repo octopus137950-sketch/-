@@ -248,7 +248,7 @@
             }
         });
 
-        // 🧠 ฟังก์ชันยิงข้ามโลกไปหา Hugging Face AI ของเราเพื่อดึงข้อความซับ
+        // 🧠 ฟังก์ชันยิงข้ามโลกไปหา Hugging Face AI เวอร์ชันแก้ไขการเชื่อมต่อ
         async function runAiSubtitle() {
             if (!currentVideoFile) return;
             const statusDiv = document.getElementById('status');
@@ -262,34 +262,53 @@
                 // 1. นำวิดีโอเข้าแรมเสมือน
                 ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(currentVideoFile));
                 
-                // 2. ดึงเฉพาะเสียงออกมาเป็นไฟล์ .mp3 เพื่อความรวดเร็วในการส่งข้อมูลออกอินเทอร์เน็ต
+                // 2. ดึงเฉพาะเสียงออกมาเป็นไฟล์ .mp3 เพื่อส่งข้อมูลได้เร็วขึ้น
                 await ffmpeg.run('-i', 'source.mp4', '-vn', '-acodec', 'libmp3lame', 'audio.mp3');
                 const audioData = ffmpeg.FS('readFile', 'audio.mp3');
-                const audioBlob = new Blob([audioData.buffer], { type: 'audio/mp3' });
+                const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
 
-                // 🚨 ตรงนี้สำคัญมาก!!! เปลี่ยน URL ด้านล่างนี้ให้เป็นลิงก์ API ของคุณที่คุณก๊อปปี้มา
-                const HF_API_URL = "https://mushroom27-thai-whisper-sub.hf.space/api/predict";
+                // 📍 ใส่ URL ตรงของ Hugging Face Spaces ร่วมกับท่อโครงสร้างของ Gradio API
+                const HF_API_URL = "https://mushroom27-thai-whisper-sub.hf.space/run/predict";
 
-                // 3. ยิงรูปแบบฟอร์มส่งให้ Hugging Face Gradio API
-                let formData = new FormData();
-                formData.append("data", audioBlob, "audio.mp3");
+                // 3. แปลงไฟล์เสียงเป็น Base64 String เพื่อส่งในรูปแบบ JSON ที่เสถียรที่สุด
+                const base64Audio = await blobToBase64(audioBlob);
 
+                // 4. ส่งข้อมูลเข้าท่อหลักของเซิร์ฟเวอร์หลังบ้าน
                 const response = await fetch(HF_API_URL, {
                     method: "POST",
-                    body: JSON.stringify({ data: [ { "data": await blobToBase64(audioBlob), "name": "audio.mp3" } ] }),
-                    headers: { "Content-Type": "application/json" }
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        data: [
+                            {
+                                "data": base64Audio,
+                                "name": "audio.mp3"
+                            }
+                        ]
+                    })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const jsonResult = await response.json();
-                // ข้อมูลคำตอบจาก Python ของเราจะอยู่ใน jsonResult.data[0]
-                parsedSubtitles = jsonResult.data[0]; 
                 
-                statusDiv.innerText = `✨ AI แกะซับเสร็จสิ้น! พบทั้งหมด ${parsedSubtitles.length} ประโยค พร้อมฝังลงคลิปตอนกดหั่นแล้วครับ`;
-                alert("แกะเสียงสำเร็จแล้ว! ตอนนี้คุณสามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' เพื่อดูผลลัพธ์พร้อมซับได้เลยครับ");
+                // ดึงข้อมูลคำตอบซับที่แกะมาจากฝั่ง Python
+                if (jsonResult.data && jsonResult.data[0]) {
+                    parsedSubtitles = jsonResult.data[0]; 
+                    statusDiv.innerText = `✨ AI แกะซับเสร็จสิ้น! พบทั้งหมด ${parsedSubtitles.length} ประโยค พร้อมฝังลงคลิปตอนกดหั่นแล้วครับ`;
+                    alert("แกะเสียงสำเร็จแล้ว! ตอนนี้สามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' ได้เลยครับ");
+                } else {
+                    statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ตอบกลับมาสำเร็จ แต่ไม่มีข้อความซับส่งกลับมา (ลองเช็กไฟล์เสียง)";
+                    document.getElementById('ai-btn').disabled = false;
+                }
 
             } catch (err) {
                 console.error(err);
-                statusDiv.innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ AI";
+                statusDiv.innerText = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message}`;
                 document.getElementById('ai-btn').disabled = false;
             }
         }
