@@ -7,6 +7,8 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
     <script src="./ffmpeg.min.js" onerror="handleScriptError()"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js"></script>
 
     <style>
         :root {
@@ -239,7 +241,7 @@
             }
         });
 
-        // ตรวจจับเมื่อเลือกไฟล์วิดีโอ เพื่อเปิดให้กดปุ่ม AI ได้
+        // ตรวจจับเมื่อเลือกไฟล์วิดีโอ
         document.getElementById('video-input').addEventListener('change', (e) => {
             currentVideoFile = e.target.files[0];
             if (currentVideoFile) {
@@ -248,11 +250,11 @@
             }
         });
 
-        // 🧠 ฟังก์ชันยิงข้ามโลกไปหา Hugging Face AI เวอร์ชันแก้ไขการเชื่อมต่อ
+        // 🧠 ฟังก์ชันยิงข้อมูลหา Hugging Face AI ด้วยวิธีเรียกผ่าน Gradio Client แท้ๆ เพื่อแก้ปัญหา Error 405
         async function runAiSubtitle() {
             if (!currentVideoFile) return;
             const statusDiv = document.getElementById('status');
-            statusDiv.innerText = "🚀 กำลังสกัดเสียงจากคลิปและส่งเข้าเซิร์ฟเวอร์ AI หลังบ้าน (อาจใช้เวลา 1-2 นาที)...";
+            statusDiv.innerText = "🚀 กำลังสกัดเสียงและเชื่อมต่อไปยัง AI (ขั้นตอนนี้ใช้เวลาประมาณ 1-2 นาที)...";
             document.getElementById('ai-btn').disabled = true;
 
             try {
@@ -262,63 +264,35 @@
                 // 1. นำวิดีโอเข้าแรมเสมือน
                 ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(currentVideoFile));
                 
-                // 2. ดึงเฉพาะเสียงออกมาเป็นไฟล์ .mp3 เพื่อส่งข้อมูลได้เร็วขึ้น
+                // 2. ดึงเฉพาะเสียงออกมาเป็นไฟล์ .mp3 
                 await ffmpeg.run('-i', 'source.mp4', '-vn', '-acodec', 'libmp3lame', 'audio.mp3');
                 const audioData = ffmpeg.FS('readFile', 'audio.mp3');
                 const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
 
-                // 📍 ใส่ URL ตรงของ Hugging Face Spaces ร่วมกับท่อโครงสร้างของ Gradio API
-                const HF_API_URL = "https://mushroom27-thai-whisper-sub.hf.space/run/predict";
-
-                // 3. แปลงไฟล์เสียงเป็น Base64 String เพื่อส่งในรูปแบบ JSON ที่เสถียรที่สุด
-                const base64Audio = await blobToBase64(audioBlob);
-
-                // 4. ส่งข้อมูลเข้าท่อหลักของเซิร์ฟเวอร์หลังบ้าน
-                const response = await fetch(HF_API_URL, {
-                    method: "POST",
-                    headers: { 
-                        "Content-Type": "application/json",
-                        "Accept": "application/json"
-                    },
-                    body: JSON.stringify({
-                        data: [
-                            {
-                                "data": base64Audio,
-                                "name": "audio.mp3"
-                            }
-                        ]
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const jsonResult = await response.json();
+                // 3. เรียกใช้ระบบจำลอง Client เชื่อมไปที่เซิร์ฟเวอร์ของคุณโดยตรง
+                // วิธีนี้จะข้ามผ่านระบบความปลอดภัยของเบราว์เซอร์ไปหา Hugging Face ได้อย่างสมบูรณ์แบบ
+                const app = await client.client("https://mushroom27-thai-whisper-sub.hf.space/");
                 
-                // ดึงข้อมูลคำตอบซับที่แกะมาจากฝั่ง Python
-                if (jsonResult.data && jsonResult.data[0]) {
-                    parsedSubtitles = jsonResult.data[0]; 
+                // 4. สั่งให้ AI เริ่มประมวลผลคำสั่ง predict ผ่านตัวแปร Blob เสียงที่เราสกัดไว้
+                const result = await app.predict("/predict", [
+                    audioBlob
+                ]);
+
+                // 5. รับค่าข้อความซับไตเติลที่ดึงมาสำเร็จ
+                if (result && result.data && result.data[0]) {
+                    parsedSubtitles = result.data[0]; 
                     statusDiv.innerText = `✨ AI แกะซับเสร็จสิ้น! พบทั้งหมด ${parsedSubtitles.length} ประโยค พร้อมฝังลงคลิปตอนกดหั่นแล้วครับ`;
                     alert("แกะเสียงสำเร็จแล้ว! ตอนนี้สามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' ได้เลยครับ");
                 } else {
-                    statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ตอบกลับมาสำเร็จ แต่ไม่มีข้อความซับส่งกลับมา (ลองเช็กไฟล์เสียง)";
+                    statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ตอบกลับมาสำเร็จ แต่รูปแบบข้อมูลไม่ถูกต้อง";
                     document.getElementById('ai-btn').disabled = false;
                 }
 
             } catch (err) {
                 console.error(err);
-                statusDiv.innerText = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message}`;
+                statusDiv.innerText = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message || err}`;
                 document.getElementById('ai-btn').disabled = false;
             }
-        }
-
-        function blobToBase64(blob) {
-            return new Promise((resolve, _) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
-            });
         }
 
         // 🎬 ฟังก์ชันสับคลิปวิดีโอ (ผสมโรงกับการฝังซับถ้ามีข้อความจาก AI)
@@ -343,7 +317,7 @@
                 const { fetchFile } = FFmpeg;
                 ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentVideoFile));
 
-                // 📝 ถ้าผู้ใช้เคยกดปุ่ม AI แล้วมีข้อมูลซับมา เราจะสร้างไฟล์ .srt แปะไว้ในระบบ
+                // ถ้าผู้ใช้เคยกดปุ่ม AI แล้วมีข้อมูลซับมา เราจะสร้างไฟล์ .srt แปะไว้ในระบบ
                 if (parsedSubtitles && parsedSubtitles.length > 0) {
                     let srtContent = "";
                     parsedSubtitles.forEach((item, index) => {
@@ -354,14 +328,14 @@
                     ffmpeg.FS('writeFile', 'sub.srt', new TextEncoder().encode(srtContent));
                 }
 
-                // 🛠️ วิ่งงานคำสั่ง FFmpeg
+                // วิ่งงานคำสั่ง FFmpeg
                 let ffmpegArgs = ['-i', 'input.mp4'];
                 
-                // ถ้าระบบตรวจเจอซับไตเติล ให้เปิดโหมดดึงฟอนต์และวาดซับลงไปในเนื้อทันที (Burn-in)
+                // ถ้าระบบตรวจเจอซับไตเติล ให้ทำการฝังซับลงไปในเนื้อทันที (Burn-in)
                 if (parsedSubtitles && parsedSubtitles.length > 0) {
                     ffmpegArgs.push('-vf', 'subtitles=sub.srt:force_style=\'FontSize=16,PrimaryColour=&H0039FF14,Alignment=2\'');
                 } else {
-                    ffmpegArgs.push('-c', 'copy'); // ถ้าไม่มีซับ ให้ใช้โหมด copy ความเร็วสูงธรรมดา
+                    ffmpegArgs.push('-c', 'copy');
                 }
 
                 ffmpegArgs.push(
@@ -389,7 +363,7 @@
             }
         }
 
-        // แปลงเวลาวินาทีธรรมดา ให้กลายเป็นฟอร์แมตไฟล์ซับแบบมาตรฐาน (00:00:00,000)
+        // แปลงเวลาวินาทีให้กลายเป็นฟอร์แมตไฟล์ซับแบบมาตรฐาน (00:00:00,000)
         function formatSrtTime(seconds) {
             let date = new Date(null);
             date.setSeconds(seconds);
