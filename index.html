@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CLIP SPLITTER PRO + LOCAL AI SUB</title>
+    <title>CLIP SPLITTER PRO</title>
     
+    <!-- นำเข้า Service Worker และ FFmpeg สำหรับตัดวิดีโอบนเบราว์เซอร์มือถือ -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
     <script src="./ffmpeg.min.js" onerror="handleScriptError()"></script>
 
@@ -16,8 +17,6 @@
             --text-muted: #8e8e93;
             --accent-color: #39ff14; /* เขียวนีออน */
             --blue-color: #007aff;
-            --purple-color: #af52de; /* สีม่วงสำหรับปุ่ม AI */
-            --error-color: #ff3b30;
             --border-radius: 14px;
         }
 
@@ -111,24 +110,6 @@
         }
         .btn-primary:active { transform: scale(0.98); }
 
-        .btn-ai {
-            width: 100%;
-            background-color: var(--purple-color);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            margin-top: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-        .btn-ai:disabled { opacity: 0.5; cursor: not-allowed; }
-
         #status {
             background-color: #2c2c2e;
             padding: 12px;
@@ -151,14 +132,13 @@
         .progress-bar {
             width: 0%;
             height: 18px;
-            background-color: var(--blue-color);
+            background-color: var(--accent-color);
             text-align: center;
             line-height: 18px;
-            color: white;
+            color: #000000;
             font-size: 11px;
             font-weight: 700;
         }
-        .video-bar { background-color: var(--accent-color); color: #000000; }
 
         .clip-card {
             background: #1c1c1e;
@@ -190,7 +170,7 @@
 <body>
 
     <div class="container">
-        <h2>CLIP SPLITTER + AI SUB</h2>
+        <h2>CLIP SPLITTER PRO</h2>
         
         <div class="form-group">
             <label>เลือกไฟล์วิดีโอกจากมือถือ</label>
@@ -207,18 +187,12 @@
         </div>
         
         <button class="btn-primary" onclick="processVideo()">เริ่มหั่นวิดีโอ</button>
-        <button id="ai-btn" class="btn-ai" onclick="runAiSubtitle()" disabled>✨ แกะซับออโต้ด้วย AI ในเครื่อง</button>
 
         <div id="status">สถานะ: รอสั่งงาน</div>
 
-        <div id="system-progress-container" class="progress-container">
-            <div id="system-progress-bar" class="progress-bar">0%</div>
-        </div>
         <div id="video-progress-container" class="progress-container">
-            <div id="video-progress-bar" class="progress-bar video-bar">0%</div>
+            <div id="video-progress-bar" class="progress-bar">0%</div>
         </div>
-
-        <audio id="hidden-audio" style="display:none;"></audio>
 
         <div id="output-list"></div>
     </div>
@@ -226,10 +200,9 @@
     <script>
         let ffmpeg = null;
         let currentVideoFile = null;
-        let parsedSubtitles = []; 
 
         function handleScriptError() {
-            alert("❌ ไม่พบไฟล์ ffmpeg.min.js");
+            alert("❌ ไม่พบไฟล์ ffmpeg.min.js ในโฟลเดอร์ กรุณาตรวจสอบอีกครั้งครับ");
         }
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -243,87 +216,9 @@
         document.getElementById('video-input').addEventListener('change', (e) => {
             currentVideoFile = e.target.files[0];
             if (currentVideoFile) {
-                document.getElementById('ai-btn').disabled = false;
-                document.getElementById('status').innerText = "เลือกไฟล์วิดีโอแล้ว! กดปุ่มสีม่วงเพื่อให้ AI ในมือถือแกะซับได้เลย";
+                document.getElementById('status').innerText = "เลือกไฟล์วิดีโอแล้ว! ตั้งเวลาแล้วกดปุ่มเริ่มหั่นได้เลย";
             }
         });
-
-        // 🧠 ฟังก์ชันแกะซับเวอร์ชันออฟไลน์ ใช้ตัวรู้จำเสียงในเครื่องมือถือ (หมดปัญหา Failed to Fetch ถาวร)
-        async function runAiSubtitle() {
-            if (!currentVideoFile) return;
-            const statusDiv = document.getElementById('status');
-            
-            // ตรวจสอบว่าเบราว์เซอร์รองรับระบบตรวจจับเสียงหรือไม่
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                statusDiv.innerText = "❌ มือถือหรือเบราว์เซอร์นี้ไม่รองรับระบบแกะเสียงในเครื่อง แนะนำให้เปิดบน Google Chrome ครับ";
-                return;
-            }
-
-            statusDiv.innerText = "🎬 กำลังสกัดและเตรียมฟังเสียงเพื่อถอดรหัสคำไทย...";
-            document.getElementById('ai-btn').disabled = true;
-
-            try {
-                if (!ffmpeg.isLoaded()) await ffmpeg.load();
-                const { fetchFile } = FFmpeg;
-                
-                ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(currentVideoFile));
-                await ffmpeg.run('-i', 'source.mp4', '-vn', '-acodec', 'libmp3lame', 'audio.mp3');
-                const audioData = ffmpeg.FS('readFile', 'audio.mp3');
-                const audioBlob = new Blob([audioData.buffer], { type: 'audio/mp3' });
-                
-                // นำเสียงมาเล่นในแอปเงียบๆ เพื่อให้ตัวตรวจจับเสียงทำงาน
-                const audioUrl = URL.createObjectURL(audioBlob);
-                const audioElement = document.getElementById('hidden-audio');
-                audioElement.src = audioUrl;
-
-                // ตั้งค่าระบบจำเสียงตัวเครื่อง
-                const recognition = new SpeechRecognition();
-                recognition.lang = 'th-TH'; // เน้นภาษาไทยคัดกรอง 100%
-                recognition.interimResults = false;
-                recognition.maxAlternatives = 1;
-
-                let fullTranscript = "";
-
-                recognition.onstart = () => {
-                    statusDiv.innerText = "🎙️ AI กำลังฟังและพิมพ์คำไทยตามเสียงในคลิป...";
-                    audioElement.play();
-                };
-
-                recognition.onresult = (event) => {
-                    const resultText = event.results[0][0].transcript;
-                    fullTranscript += resultText + " ";
-                };
-
-                recognition.onerror = (event) => {
-                    console.error("Speech error:", event.error);
-                };
-
-                recognition.onend = () => {
-                    if (fullTranscript.trim() === "") {
-                        // ถ้าดักเสียงตรงๆ ไม่ได้เนื่องจากสิทธิ์ความปลอดภัย ให้ใส่ซับจำลองกันระบบพัง
-                        fullTranscript = "คลิปวิดีโอถูกตัดย่อยสำเร็จเรียบร้อยแล้ว";
-                    }
-                    
-                    parsedSubtitles = [{
-                        "start": 0,
-                        "end": 999,
-                        "text": fullTranscript.trim()
-                    }];
-
-                    statusDiv.innerText = `✨ ถอดเสียงเสร็จสิ้น! พร้อมฝังคำบรรยายแล้ว`;
-                    alert("ถอดรหัสเสียงสำเร็จ! สามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' ได้เลยครับ");
-                };
-
-                // สั่งให้ระบบเริ่มฟังเสียง
-                recognition.start();
-
-            } catch (err) {
-                console.error(err);
-                statusDiv.innerText = `❌ ข้อผิดพลาด: ${err.message}`;
-                document.getElementById('ai-btn').disabled = false;
-            }
-        }
 
         async function processVideo() {
             const statusDiv = document.getElementById('status');
@@ -335,72 +230,55 @@
             const totalDurationInSeconds = (hrs * 3600) + (mins * 60) + secs;
 
             if (!currentVideoFile) { alert('กรุณาเลือกไฟล์วิดีโอก่อนครับ'); return; }
-            if (totalDurationInSeconds <= 0) { alert('กรุณาตั้งความยาวให้มากกว่า 0 วิ'); return; }
+            if (totalDurationInSeconds <= 0) { alert('กรุณาตั้งความยาวคลิปย่อยให้มากกว่า 0 วินาทีครับ'); return; }
 
             document.getElementById('output-list').innerHTML = '';
             document.getElementById('video-progress-container').style.display = 'block';
-            statusDiv.innerText = "กำลังสับคลิปและฝังตัวอักษรลงเนื้อวิดีโอ...";
+            statusDiv.innerText = "กำลังประมวลผลและสับแบ่งวิดีโอในเครื่อง...";
 
             try {
+                // โหลดระบบ FFmpeg ถ้ายังไม่ได้โหลด
                 if (!ffmpeg.isLoaded()) await ffmpeg.load();
+                
                 const { fetchFile } = FFmpeg;
+                // บันทึกไฟล์ลงในระบบจำลองของเบราว์เซอร์
                 ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentVideoFile));
 
-                if (parsedSubtitles && parsedSubtitles.length > 0) {
-                    let srtContent = "";
-                    parsedSubtitles.forEach((item, index) => {
-                        srtContent += `${index + 1}\n`;
-                        srtContent += `${formatSrtTime(item.start)} --> ${formatSrtTime(item.end)}\n`;
-                        srtContent += `${item.text}\n\n`;
-                    });
-                    ffmpeg.FS('writeFile', 'sub.srt', new TextEncoder().encode(srtContent));
-                }
-
-                let ffmpegArgs = ['-i', 'input.mp4'];
-                
-                if (parsedSubtitles && parsedSubtitles.length > 0) {
-                    ffmpegArgs.push('-vf', 'subtitles=sub.srt:force_style=\'FontSize=16,PrimaryColour=&H0039FF14,Alignment=2\'');
-                } else {
-                    ffmpegArgs.push('-c', 'copy');
-                }
-
-                ffmpegArgs.push(
+                // คำสั่ง FFmpeg สำหรับหั่นคลิปแบบรวดเร็วโดยไม่แปลงรหัสใหม่ (Copy Stream)
+                const ffmpegArgs = [
+                    '-i', 'input.mp4',
+                    '-c', 'copy',
                     '-map', '0',
                     '-segment_time', String(totalDurationInSeconds),
                     '-f', 'segment',
                     '-reset_timestamps', '1',
                     'output_%d.mp4'
-                );
+                ];
 
+                // อัปเดตแถบความคืบหน้า (Progress Bar)
                 ffmpeg.setProgress(({ ratio }) => {
-                    const percentage = Math.round(ratio * 100);
+                    const percentage = Math.min(Math.round(ratio * 100), 100);
                     videoBar.style.width = percentage + '%';
                     videoBar.innerText = percentage + '%';
                 });
 
+                // สั่งรัน FFmpeg
                 await ffmpeg.run(...ffmpegArgs);
 
-                statusDiv.innerText = "⚡ สับไฟล์และฝังซับสำเร็จ!";
+                statusDiv.innerText = "⚡ หั่นไฟล์วิดีโอสำเร็จเรียบร้อยแล้ว!";
                 generateDownloadButtons();
 
             } catch (error) {
-                statusDiv.innerText = "❌ เกิดข้อผิดพลาดในการประมวลผลคลิป";
+                statusDiv.innerText = "❌ เกิดข้อผิดพลาดในการหั่นคลิป";
                 console.error(error);
             }
-        }
-
-        function formatSrtTime(seconds) {
-            let date = new Date(null);
-            date.setSeconds(seconds);
-            let ms = Math.floor((seconds % 1) * 1000);
-            let timeString = date.toISOString().substr(11, 8);
-            return `${timeString},${String(ms).padStart(3, '0')}`;
         }
 
         function generateDownloadButtons() {
             const outputList = document.getElementById('output-list');
             outputList.innerHTML = '<h3>คลิปย่อยที่หั่นสำเร็จ:</h3>';
             let i = 0;
+            
             while (true) {
                 try {
                     const fileName = `output_${i}.mp4`;
@@ -424,9 +302,10 @@
                     const actionsDiv = document.createElement('div');
                     actionsDiv.className = 'clip-actions';
 
+                    // ปุ่มเซฟลงเครื่อง
                     const dlBtn = document.createElement('button');
                     dlBtn.className = 'action-btn';
-                    dlBtn.innerText = '💾';
+                    dlBtn.innerText = '💾 ดาวน์โหลด';
                     dlBtn.onclick = () => {
                         const a = document.createElement('a');
                         a.href = url;
@@ -435,18 +314,20 @@
                     };
                     actionsDiv.appendChild(dlBtn);
 
+                    // ปุ่มกดแชร์ตรงเข้าแอปอื่น
                     const shareBtn = document.createElement('button');
                     shareBtn.className = 'action-btn share-btn';
                     shareBtn.innerText = '📤 แชร์';
                     shareBtn.onclick = async () => {
                         if (navigator.canShare && navigator.canShare({ files: [videoFile] })) {
                             try { await navigator.share({ files: [videoFile] }); } catch (err) {}
-                        } else { alert('❌ มือถือไม่รองรับแชร์ตรง กดดาวน์โหลดแทนได้เลยครับ'); }
+                        } else { alert('❌ มือถือไม่รองรับระบบแชร์ตรง สามารถกดปุ่มดาวน์โหลดแทนได้เลยครับ'); }
                     };
                     actionsDiv.appendChild(shareBtn);
                     infoRow.appendChild(actionsDiv);
                     cardDiv.appendChild(infoRow);
 
+                    // วิดีโอพรีวิว
                     const videoElement = document.createElement('video');
                     videoElement.className = 'preview-video';
                     videoElement.src = url;
@@ -455,7 +336,10 @@
 
                     outputList.appendChild(cardDiv);
                     i++;
-                } catch (e) { break; }
+                } catch (e) { 
+                    // ถ้าอ่านไฟล์ถัดไปไม่ได้ (หมดคลิปแล้ว) ให้หยุดทำงาน loop
+                    break; 
+                }
             }
         }
     </script>
