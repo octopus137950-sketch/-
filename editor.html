@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIDEO EDITOR | ต่อคลิป</title>
+    <script src="./coi-serviceworker.min.js"></script>
+    <script src="./ffmpeg.min.js"></script>
+    <style>
+        :root { --bg: #0b0b0c; --card: #16161a; --text: #fff; --accent: #39ff14; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 500px; margin: auto; background: var(--card); padding: 20px; border-radius: 14px; border: 1px solid #2c2c2e; }
+        input[type="file"] { width: 100%; margin-bottom: 10px; }
+        #fileList { margin: 15px 0; font-size: 13px; color: #8e8e93; }
+        .btn-run { width: 100%; background: var(--accent); color: #000; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; }
+        #status { margin-top: 15px; color: var(--accent); text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🎬 Video Merger (ต่อคลิป)</h2>
+        <p style="font-size: 12px; color: #8e8e93;">เลือกหลายไฟล์เพื่อนำมาต่อกันตามลำดับที่เลือก</p>
+        
+        <input type="file" id="fileInput" multiple accept="video/*">
+        <div id="fileList">ยังไม่มีไฟล์ในคิว</div>
+        
+        <button class="btn-run" onclick="mergeVideos()">เริ่มรวมวิดีโอ</button>
+        <div id="status">สถานะ: พร้อมทำงาน</div>
+    </div>
+
+    <script>
+        let ffmpeg = null;
+        const fileInput = document.getElementById('fileInput');
+
+        fileInput.addEventListener('change', () => {
+            const files = Array.from(fileInput.files);
+            document.getElementById('fileList').innerHTML = files.map(f => `• ${f.name}`).join('<br>');
+        });
+
+        async function mergeVideos() {
+            const files = fileInput.files;
+            if (files.length < 2) { alert('เลือกอย่างน้อย 2 ไฟล์เพื่อต่อคลิปครับ'); return; }
+            
+            const status = document.getElementById('status');
+            status.innerText = "กำลังเตรียมไฟล์...";
+
+            if (!ffmpeg) {
+                ffmpeg = FFmpeg.createFFmpeg({ log: true });
+                await ffmpeg.load();
+            }
+
+            let fileListText = "";
+            for (let i = 0; i < files.length; i++) {
+                const name = `input_${i}.mp4`;
+                ffmpeg.FS('writeFile', name, await FFmpeg.fetchFile(files[i]));
+                fileListText += `file '${name}'\n`;
+            }
+
+            // สร้างไฟล์ text เพื่อสั่ง FFmpeg ว่าจะต่อไฟล์ไหนบ้าง
+            ffmpeg.FS('writeFile', 'list.txt', fileListText);
+
+            status.innerText = "กำลังรวมวิดีโอ... (อย่าเพิ่งปิดหน้าจอนะครับ)";
+
+            try {
+                // คำสั่งต่อไฟล์
+                await ffmpeg.run('-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', 'output.mp4');
+                
+                const data = ffmpeg.FS('readFile', 'output.mp4');
+                const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+                
+                status.innerHTML = `✅ รวมคลิปสำเร็จ! <br><br> <a href="${url}" download="merged_video.mp4" style="color:var(--accent)">💾 ดาวน์โหลดวิดีโอ</a>`;
+            } catch (e) {
+                status.innerText = "❌ รวมคลิปไม่สำเร็จ ลองตรวจไฟล์ดูนะครับ";
+                console.error(e);
+            }
+        }
+    </script>
+</body>
+</html>
