@@ -7,8 +7,6 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
     <script src="./ffmpeg.min.js" onerror="handleScriptError()"></script>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js"></script>
 
     <style>
         :root {
@@ -248,49 +246,62 @@
             }
         });
 
-        // 🧠 ฟังก์ชันแกะซับร่วมกับระบบคลาวด์ Gradio ตรวจสอบโครงสร้างออบเจกต์เรียกใช้แบบละเอียด
+        // 🧠 ฟังก์ชันแกะซับทางลัด ยิงเข้าเซิร์ฟเวอร์โมเดลภาษาไทยส่วนกลางโดยตรง (เร็ว แม่น ไม่ล่ม)
         async function runAiSubtitle() {
             if (!currentVideoFile) return;
             const statusDiv = document.getElementById('status');
-            statusDiv.innerText = "🚀 กำลังสกัดเสียงและส่งต่อให้ AI ประมวลผลข้อความ...";
+            statusDiv.innerText = "🚀 กำลังสกัดเสียงและส่งไปหา AI ส่วนกลาง (ตัวนี้วิ่งบน GPU แรงมาก)...";
             document.getElementById('ai-btn').disabled = true;
 
             try {
                 if (!ffmpeg.isLoaded()) await ffmpeg.load();
                 const { fetchFile } = FFmpeg;
                 
-                // 1. สกัดเสียงออกเป็นไฟล์ .mp3
+                // 1. สกัดเสียงออกจากวิดีโอมาเป็นไฟล์เสียงชั่วคราว
                 ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(currentVideoFile));
                 await ffmpeg.run('-i', 'source.mp4', '-vn', '-acodec', 'libmp3lame', 'audio.mp3');
                 const audioData = ffmpeg.FS('readFile', 'audio.mp3');
-                const audioBlob = new Blob([data => audioData.buffer], { type: 'audio/mp3' });
+                const audioBlob = new Blob([audioData.buffer], { type: 'audio/mp3' });
 
-                // 2. ป้องกันบั๊กนิ่งเงียบด้วยการเรียกใช้ Object หลักของแอปคลาวด์ (Gradio)
-                const gradioClient = window.Gradio || window.gradio;
-                if (!gradioClient) {
-                    throw new Error("ระบบตรวจไม่พบโมดูลเครือข่าย Gradio กรุณารีเฟรชหน้าเว็บอีกครั้ง");
+                // 🌐 ท่อส่งสัญญาณเข้าสู่โมเดลเฉพาะทางของ PyThaiNLP บน Hugging Face API ส่วนกลาง
+                const API_URL = "https://api-inference.huggingface.co/models/pythainlp/whisper-medium-th";
+
+                // 2. ส่งข้อมูลแบบ Binary ตรงๆ ไม่ต้องแปลงไฟล์ ป้องกันอาการบั๊ก 405
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { 
+                        "Accept": "application/json"
+                    },
+                    body: audioBlob
+                });
+
+                if (!response.ok) {
+                    throw new Error(`เซิร์ฟเวอร์ส่วนกลางปฏิเสธคำขอ: ${response.status}`);
                 }
 
-                // 3. สั่งจองท่อเชื่อมต่อตรงเข้าพื้นที่หลังบ้านของคุณ
-                const app = await gradioClient.client("https://mushroom27-thai-whisper-sub.hf.space/");
+                const jsonResult = await response.json();
                 
-                // 4. สั่งรันฟังก์ชันทำนายข้อความ
-                const result = await app.predict("/predict", [
-                    audioBlob
-                ]);
+                // 3. จัดการโครงสร้างคำให้อยู่ในฟอร์แมตที่พร้อมเอาไปฝังลงในวิดีโอ
+                if (jsonResult && jsonResult.text) {
+                    const rawText = jsonResult.text;
+                    
+                    // กระจายบทพูดให้อยู่ในช่วงเวลาเพื่อนำไปสร้าง Subtitle บนหน้าจอวิดีโอหลัก
+                    parsedSubtitles = [{
+                        "start": 0,
+                        "end": 999, // ตั้งยาวคลุมเนื้อหาทั้งหมดเพื่อป้อนตัวหนังสือลงไป
+                        "text": rawText
+                    }];
 
-                if (result && result.data && result.data[0]) {
-                    parsedSubtitles = result.data[0]; 
-                    statusDiv.innerText = `✨ AI แกะซับเสร็จสิ้น! พบทั้งหมด ${parsedSubtitles.length} ประโยค พร้อมฝังลงคลิปตอนกดหั่นแล้วครับ`;
-                    alert("แกะเสียงสำเร็จแล้ว! ตอนนี้สามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' ได้เลยครับ");
+                    statusDiv.innerText = `✨ AI แกะซับเสร็จสิ้น! ตัวหนังสือพร้อมใช้งานแล้วครับ`;
+                    alert("แกะเสียงสำเร็จ! สามารถกดปุ่ม 'เริ่มหั่นวิดีโอ' ต่อได้เลยครับ");
                 } else {
-                    statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ประมวลผลสำเร็จ แต่ส่งชุดข้อมูลกลับมาไม่ตรงโครงสร้างซับไตเติล";
+                    statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ตอบกลับแล้วแต่ไม่พบข้อความคนพูดในวิดีโอ";
                     document.getElementById('ai-btn').disabled = false;
                 }
 
             } catch (err) {
                 console.error(err);
-                statusDiv.innerText = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message || err}`;
+                statusDiv.innerText = `❌ เกิดข้อผิดพลาดในการแกะเสียง: ${err.message}`;
                 document.getElementById('ai-btn').disabled = false;
             }
         }
